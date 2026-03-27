@@ -636,6 +636,8 @@ class Structure:
         c._box = deepcopy(self._box)
         c._coordinates = deepcopy(self._coordinates)
         c.combining_rule = self.combining_rule
+        if hasattr(self, '_rosetta_bridge_metadata'):
+            c._rosetta_bridge_metadata = deepcopy(self._rosetta_bridge_metadata)
         # Transfer TER cards
         for r1, r2 in zip(c.residues, self.residues):
             r1.ter = r2.ter
@@ -3879,6 +3881,8 @@ class Structure:
                 retdict[key] = getattr(self, key)
             except AttributeError:
                 continue
+        if hasattr(self, '_rosetta_bridge_metadata'):
+            retdict['_rosetta_bridge_metadata'] = self._rosetta_bridge_metadata
 
         return retdict
 
@@ -3900,6 +3904,8 @@ class Structure:
                     'space_group'):
             if key in d:
                 setattr(self, key, d[key])
+        if '_rosetta_bridge_metadata' in d:
+            self._rosetta_bridge_metadata = d['_rosetta_bridge_metadata']
 
         self.atoms = AtomList()
         for r in self.residues:

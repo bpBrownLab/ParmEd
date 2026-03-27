@@ -11,7 +11,7 @@ __author__ = 'Jason Swails'
 __all__ = ['exceptions', 'periodic_table', 'residue', 'unit', 'utils', 'Structure', 'entos', 'dlpoly',
            'StructureView', 'amber', 'charmm', 'namd', 'gromacs', 'tinker', 'openmm', 'rosetta',
            'rdkit', 'formats', 'Vec3', 'ParameterSet', 'load_file', 'read_PDB', 'read_CIF',
-           'load_rosetta', 'load_rdkit', 'download_PDB', 'download_CIF', 'tools', 'version']
+           'load_rosetta', 'save_rosetta', 'load_rdkit', 'download_PDB', 'download_CIF', 'tools', 'version']
 
 from . import _version
 __version__ = _version.get_versions()['version']
@@ -32,6 +32,7 @@ read_CIF = formats.CIFFile.parse
 read_pdb = read_PDB
 read_cif = read_CIF
 load_rosetta = rosetta.RosettaPose.load
+save_rosetta = rosetta.RosettaPose.dump
 
 download_PDB = formats.PDBFile.download
 download_CIF = formats.CIFFile.download
