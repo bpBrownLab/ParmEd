@@ -33,6 +33,10 @@ PARMED_TO_ROSETTA_RESIDUE_ALIASES = {
     "HIP": ("HIP", "HIS_P", "HIS"),
     "CYX": ("CYX", "CYD", "CYS"),
     "CYM": ("CYM", "CYZ", "CYS"),
+    # Protonated Asp/Glu are intentionally not aliased here. In Rosetta they are
+    # commonly exposed through pH-mode/custom params rather than a stable
+    # always-loaded fa_standard three-letter code, and silently collapsing them
+    # onto ASP/GLU would defeat protonation-state studies.
     "SEP": ("SEP",),
     "TPO": ("TPO",),
     "PTR": ("PTR",),
