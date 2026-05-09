@@ -304,7 +304,15 @@ def test_fake_structure_to_pose_handles_caps_and_chain_breaks(monkeypatch):
     assert round_tripped.residues[3].ter is True
 
 
-def test_fake_structure_to_pose_handles_nterminal_hydrogen_aliases(monkeypatch):
+@pytest.mark.parametrize(
+    "hydrogen_names",
+    [
+        ("H", "H2", "H3"),
+        ("H1", "H2", "H3"),
+        ("H", "H1", "H2"),
+    ],
+)
+def test_fake_structure_to_pose_handles_nterminal_hydrogen_aliases(monkeypatch, hydrogen_names):
     nterm_gly = FakeResidueType(
         unique_name="GLY:NtermProteinFull",
         name3_value="GLY",
@@ -331,9 +339,9 @@ def test_fake_structure_to_pose_handles_nterminal_hydrogen_aliases(monkeypatch):
                     ("N", "Nbb", (0.0, 0.0, 0.0)),
                     ("CA", "CAbb", (1.0, 0.0, 0.0)),
                     ("C", "CObb", (2.0, 0.0, 0.0)),
-                    ("H", "Hpol", (-0.5, 0.0, 0.0)),
-                    ("H2", "Hpol", (-0.5, 0.5, 0.0)),
-                    ("H3", "Hpol", (-0.5, -0.5, 0.0)),
+                    (hydrogen_names[0], "Hpol", (-0.5, 0.0, 0.0)),
+                    (hydrogen_names[1], "Hpol", (-0.5, 0.5, 0.0)),
+                    (hydrogen_names[2], "Hpol", (-0.5, -0.5, 0.0)),
                 ],
             ),
         ],

@@ -16,9 +16,9 @@ ROSETTA_BRIDGE_METADATA_ATTR = "_rosetta_bridge_metadata"
 DEFAULT_ROSETTA_TYPE_SET = "fa_standard"
 
 POSE_TO_PARMED_ATOM_NAME_ALIASES = {
-    "1H": ("H", "H1"),
-    "2H": ("H2",),
-    "3H": ("H3",),
+    "1H": ("H", "H1", "HN", "HN1"),
+    "2H": ("H1", "H2", "HN2"),
+    "3H": ("H2", "H3", "HN3"),
     "1HH3": ("H1",),
     "2HH3": ("H2",),
     "3HH3": ("H3",),
