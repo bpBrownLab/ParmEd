@@ -304,6 +304,48 @@ def test_fake_structure_to_pose_handles_caps_and_chain_breaks(monkeypatch):
     assert round_tripped.residues[3].ter is True
 
 
+def test_fake_structure_to_pose_handles_nterminal_hydrogen_aliases(monkeypatch):
+    nterm_gly = FakeResidueType(
+        unique_name="GLY:NtermProteinFull",
+        name3_value="GLY",
+        name1_value="G",
+        atom_order=("N", "CA", "C", "1H", "2H", "3H"),
+        atom_types={
+            "N": FakeAtomType(element="N", atom_type_name="Nbb", lj_radius=1.4, lj_wdepth=0.2),
+            "CA": FakeAtomType(element="C", atom_type_name="CAbb", lj_radius=1.8, lj_wdepth=0.1),
+            "C": FakeAtomType(element="C", atom_type_name="CObb", lj_radius=1.7, lj_wdepth=0.12),
+            "1H": FakeAtomType(element="H", atom_type_name="Hpol", lj_radius=1.0, lj_wdepth=0.02),
+            "2H": FakeAtomType(element="H", atom_type_name="Hpol", lj_radius=1.0, lj_wdepth=0.02),
+            "3H": FakeAtomType(element="H", atom_type_name="Hpol", lj_radius=1.0, lj_wdepth=0.02),
+        },
+    )
+    fake_import = build_fake_import([nterm_gly])
+    monkeypatch.setattr(rosetta_pose_module, "_import_pyrosetta", lambda: fake_import)
+    structure = _build_structure(
+        [
+            (
+                0,
+                "A",
+                "GLY",
+                [
+                    ("N", "Nbb", (0.0, 0.0, 0.0)),
+                    ("CA", "CAbb", (1.0, 0.0, 0.0)),
+                    ("C", "CObb", (2.0, 0.0, 0.0)),
+                    ("H", "Hpol", (-0.5, 0.0, 0.0)),
+                    ("H2", "Hpol", (-0.5, 0.5, 0.0)),
+                    ("H3", "Hpol", (-0.5, -0.5, 0.0)),
+                ],
+            ),
+        ],
+        bonds=[],
+        ter_indices=(1,),
+    )
+
+    pose = save_rosetta(structure)
+
+    assert pose.total_residue() == 1
+
+
 def test_fake_structure_to_pose_handles_disulfides_ptms_and_metadata_copy(monkeypatch):
     _install_fake_pyrosetta(monkeypatch)
     structure = _build_structure(
