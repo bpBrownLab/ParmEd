@@ -310,6 +310,7 @@ def test_fake_structure_to_pose_handles_caps_and_chain_breaks(monkeypatch):
         ("H", "H2", "H3"),
         ("H1", "H2", "H3"),
         ("H", "H1", "H2"),
+        ("H1", "HT2", "HT3"),
     ],
 )
 def test_fake_structure_to_pose_handles_nterminal_hydrogen_aliases(monkeypatch, hydrogen_names):

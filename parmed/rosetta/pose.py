@@ -385,17 +385,59 @@ def _canonical_atom_candidates(residue_type, pose_atom_name: str):
     return _unique_strings(candidates)
 
 
-def _match_structure_atom(residue, residue_type, pose_atom_name: str, residue_meta):
+def _is_terminal_hydrogen_name(atom_name: str) -> bool:
+    return _strip(atom_name).upper() in {"1H", "2H", "3H"}
+
+
+def _hydrogen_order(atom_name: str) -> int:
+    match = _LEADING_DIGIT_ATOM_NAME.match(_strip(atom_name).upper())
+    if match is None:
+        return 0
+    return int(match.group(1)) - 1
+
+
+def _is_hydrogen_atom(atom) -> bool:
+    try:
+        return int(getattr(atom, "atomic_number", 0) or 0) == 1
+    except Exception:
+        return _strip(getattr(atom, "name", "")).upper().startswith("H")
+
+
+def _match_terminal_hydrogen_by_order(residue, pose_atom_name: str, used_atom_ids=None):
+    if not _is_terminal_hydrogen_name(pose_atom_name):
+        return None
+    used_atom_ids = used_atom_ids or set()
+    all_hydrogens = [atom for atom in residue.atoms if _is_hydrogen_atom(atom)]
+    hydrogens = [
+        atom
+        for atom in all_hydrogens
+        if id(atom) not in used_atom_ids
+    ]
+    if not hydrogens:
+        return None
+    if used_atom_ids:
+        return hydrogens[0]
+    order = _hydrogen_order(pose_atom_name)
+    if order < len(all_hydrogens):
+        return all_hydrogens[order]
+    return hydrogens[0]
+
+
+def _match_structure_atom(residue, residue_type, pose_atom_name: str, residue_meta, used_atom_ids=None):
+    used_atom_ids = used_atom_ids or set()
     atoms_by_name = {_strip(atom.name).upper(): atom for atom in residue.atoms}
     atom_meta = _residue_atom_metadata(residue_meta, pose_atom_name)
     if atom_meta is not None:
         structure_name = _strip(atom_meta.get("structure_name")).upper()
-        if structure_name in atoms_by_name:
+        if structure_name in atoms_by_name and id(atoms_by_name[structure_name]) not in used_atom_ids:
             return atoms_by_name[structure_name]
     for candidate in _canonical_atom_candidates(residue_type, pose_atom_name):
         atom = atoms_by_name.get(candidate.upper())
-        if atom is not None:
+        if atom is not None and id(atom) not in used_atom_ids:
             return atom
+    fallback_atom = _match_terminal_hydrogen_by_order(residue, pose_atom_name, used_atom_ids)
+    if fallback_atom is not None:
+        return fallback_atom
     return None
 
 
@@ -585,13 +627,21 @@ class RosettaPose:
 
             pose_residue = pose.residue(residue_index)
             pose_residue_type = _safe_call(pose_residue, "type")
+            used_atom_ids = set()
             for atom_index in range(1, pose_residue.natoms() + 1):
                 pose_atom_name = _strip(_safe_call(pose_residue, "atom_name", atom_index, default=""))
-                source_atom = _match_structure_atom(residue, pose_residue_type, pose_atom_name, residue_meta)
+                source_atom = _match_structure_atom(
+                    residue,
+                    pose_residue_type,
+                    pose_atom_name,
+                    residue_meta,
+                    used_atom_ids,
+                )
                 if source_atom is None:
                     raise RosettaError(
                         f"Could not map atom {pose_atom_name} in residue {residue.name} {residue.number}."
                     )
+                used_atom_ids.add(id(source_atom))
                 try:
                     coordinates = xyz_vector(float(source_atom.xx), float(source_atom.xy), float(source_atom.xz))
                 except AttributeError as err:
