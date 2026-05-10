@@ -208,15 +208,17 @@ def _make_atom(name, atomic_number, atom_type, xyz):
     return atom
 
 
-def _build_structure(residue_specs, bonds, ter_indices=()):
+def _build_structure(residue_specs, bonds, ter_indices=(), zero_hydrogen_atomic_numbers=False):
     structure = Structure()
     atom_index = 1
     atoms_by_key = {}
-    atomic_numbers = {"N": 7, "C": 6, "S": 16, "P": 15, "H": 1, "V": 0}
+    atomic_numbers = {"N": 7, "C": 6, "O": 8, "S": 16, "P": 15, "H": 1, "V": 0}
     for residue_number, chain_id, residue_name, atoms in residue_specs:
         for atom_name, atom_type, xyz in atoms:
             element_key = next((char for char in atom_name if char.isalpha()), atom_name[0])
             atomic_number = atomic_numbers[element_key]
+            if zero_hydrogen_atomic_numbers and atomic_number == 1:
+                atomic_number = 0
             atom = _make_atom(atom_name, atomic_number, atom_type, xyz)
             atom.number = atom_index
             atom_index += 1
@@ -349,6 +351,7 @@ def test_fake_structure_to_pose_handles_nterminal_hydrogen_aliases(monkeypatch, 
         ],
         bonds=[],
         ter_indices=(1,),
+        zero_hydrogen_atomic_numbers=True,
     )
 
     pose = save_rosetta(structure)
@@ -407,11 +410,98 @@ def test_fake_structure_to_pose_handles_leading_digit_hydrogen_stem_aliases(
         ],
         bonds=[],
         ter_indices=(1,),
+        zero_hydrogen_atomic_numbers=True,
     )
 
     pose = save_rosetta(structure)
 
     assert pose.total_residue() == 1
+
+
+def test_fake_structure_to_pose_does_not_force_nterminus_variant_without_nh3(monkeypatch):
+    internal_gly = FakeResidueType(
+        unique_name="GLY",
+        name3_value="GLY",
+        name1_value="G",
+        atom_order=("N", "H", "CA", "1HA", "2HA", "C", "O"),
+        atom_types={
+            "N": FakeAtomType(element="N", atom_type_name="Nbb", lj_radius=1.4, lj_wdepth=0.2),
+            "H": FakeAtomType(element="H", atom_type_name="Hpol", lj_radius=1.0, lj_wdepth=0.02),
+            "CA": FakeAtomType(element="C", atom_type_name="CAbb", lj_radius=1.8, lj_wdepth=0.1),
+            "1HA": FakeAtomType(element="H", atom_type_name="Hapo", lj_radius=1.0, lj_wdepth=0.02),
+            "2HA": FakeAtomType(element="H", atom_type_name="Hapo", lj_radius=1.0, lj_wdepth=0.02),
+            "C": FakeAtomType(element="C", atom_type_name="CObb", lj_radius=1.7, lj_wdepth=0.12),
+            "O": FakeAtomType(element="O", atom_type_name="OCbb", lj_radius=1.5, lj_wdepth=0.2),
+        },
+    )
+    nterm_gly = FakeResidueType(
+        unique_name="GLY:NtermProteinFull",
+        name3_value="GLY",
+        name1_value="G",
+        atom_order=("N", "1H", "2H", "3H", "CA", "1HA", "2HA", "C", "O"),
+        atom_types={
+            "N": FakeAtomType(element="N", atom_type_name="Nbb", lj_radius=1.4, lj_wdepth=0.2),
+            "1H": FakeAtomType(element="H", atom_type_name="Hpol", lj_radius=1.0, lj_wdepth=0.02),
+            "2H": FakeAtomType(element="H", atom_type_name="Hpol", lj_radius=1.0, lj_wdepth=0.02),
+            "3H": FakeAtomType(element="H", atom_type_name="Hpol", lj_radius=1.0, lj_wdepth=0.02),
+            "CA": FakeAtomType(element="C", atom_type_name="CAbb", lj_radius=1.8, lj_wdepth=0.1),
+            "1HA": FakeAtomType(element="H", atom_type_name="Hapo", lj_radius=1.0, lj_wdepth=0.02),
+            "2HA": FakeAtomType(element="H", atom_type_name="Hapo", lj_radius=1.0, lj_wdepth=0.02),
+            "C": FakeAtomType(element="C", atom_type_name="CObb", lj_radius=1.7, lj_wdepth=0.12),
+            "O": FakeAtomType(element="O", atom_type_name="OCbb", lj_radius=1.5, lj_wdepth=0.2),
+        },
+    )
+    internal_ala = FakeResidueType(
+        unique_name="ALA",
+        name3_value="ALA",
+        name1_value="A",
+        atom_order=("N", "H", "CA", "C", "O"),
+        atom_types={
+            "N": FakeAtomType(element="N", atom_type_name="Nbb", lj_radius=1.4, lj_wdepth=0.2),
+            "H": FakeAtomType(element="H", atom_type_name="Hpol", lj_radius=1.0, lj_wdepth=0.02),
+            "CA": FakeAtomType(element="C", atom_type_name="CAbb", lj_radius=1.8, lj_wdepth=0.1),
+            "C": FakeAtomType(element="C", atom_type_name="CObb", lj_radius=1.7, lj_wdepth=0.12),
+            "O": FakeAtomType(element="O", atom_type_name="OCbb", lj_radius=1.5, lj_wdepth=0.2),
+        },
+    )
+    fake_import = build_fake_import([nterm_gly, internal_gly, internal_ala])
+    monkeypatch.setattr(rosetta_pose_module, "_import_pyrosetta", lambda: fake_import)
+    structure = _build_structure(
+        [
+            (
+                0,
+                "A",
+                "GLY",
+                [
+                    ("N", "Nbb", (0.0, 0.0, 0.0)),
+                    ("H", "Hpol", (-0.5, 0.0, 0.0)),
+                    ("CA", "CAbb", (1.0, 0.0, 0.0)),
+                    ("HA2", "Hapo", (1.0, 0.5, 0.5)),
+                    ("HA3", "Hapo", (1.0, -0.5, -0.5)),
+                    ("C", "CObb", (2.0, 0.0, 0.0)),
+                    ("O", "OCbb", (2.5, 0.0, 0.0)),
+                ],
+            ),
+            (
+                1,
+                "A",
+                "ALA",
+                [
+                    ("N", "Nbb", (3.0, 0.0, 0.0)),
+                    ("H", "Hpol", (3.0, 0.5, 0.0)),
+                    ("CA", "CAbb", (4.0, 0.0, 0.0)),
+                    ("C", "CObb", (5.0, 0.0, 0.0)),
+                    ("O", "OCbb", (5.5, 0.0, 0.0)),
+                ],
+            ),
+        ],
+        bonds=[((0, "A", "C"), (1, "A", "N"))],
+    )
+
+    pose = save_rosetta(structure)
+
+    assert pose.total_residue() == 2
+    assert pose.residue(1).type().name() == "GLY"
 
 
 def test_fake_structure_to_pose_handles_disulfides_ptms_and_metadata_copy(monkeypatch):

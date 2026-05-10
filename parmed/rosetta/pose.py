@@ -16,6 +16,7 @@ ROSETTA_BRIDGE_METADATA_ATTR = "_rosetta_bridge_metadata"
 DEFAULT_ROSETTA_TYPE_SET = "fa_standard"
 
 POSE_TO_PARMED_ATOM_NAME_ALIASES = {
+    "OXT": ("OXT", "O2", "OC2"),
     "1H": ("H", "H1", "HN", "HN1"),
     "2H": ("H1", "H2", "HN2"),
     "3H": ("H2", "H3", "HN3"),
@@ -48,6 +49,23 @@ PARMED_TO_ROSETTA_RESIDUE_ALIASES = {
 }
 
 _LEADING_DIGIT_ATOM_NAME = re.compile(r"^([123])([A-Za-z0-9]+)$")
+_N_TERMINUS_HYDROGEN_NAMES = {
+    "H",
+    "HN",
+    "1H",
+    "2H",
+    "3H",
+    "H1",
+    "H2",
+    "H3",
+    "HT1",
+    "HT2",
+    "HT3",
+    "HN1",
+    "HN2",
+    "HN3",
+}
+_C_TERMINUS_EXTRA_OXYGEN_NAMES = {"OXT", "O2", "OC2"}
 
 
 def _import_pyrosetta():
@@ -294,12 +312,28 @@ def _is_polymeric_successor(previous_residue, current_residue, previous_metadata
     return _residues_are_polymerically_bonded(previous_residue, current_residue)
 
 
+def _residue_atom_names(residue) -> set[str]:
+    return {
+        _strip(getattr(atom, "name", "")).upper()
+        for atom in getattr(residue, "atoms", ())
+    }
+
+
+def _has_explicit_n_terminus_atoms(residue) -> bool:
+    atom_names = _residue_atom_names(residue)
+    return len(atom_names & _N_TERMINUS_HYDROGEN_NAMES) >= 2
+
+
+def _has_explicit_c_terminus_atoms(residue) -> bool:
+    return bool(_residue_atom_names(residue) & _C_TERMINUS_EXTRA_OXYGEN_NAMES)
+
+
 def _infer_lower_terminus(structure, residue_index: int, residue_metadata):
     metadata = residue_metadata[residue_index - 1]
     if metadata is not None and "is_lower_terminus" in metadata:
         return bool(metadata["is_lower_terminus"])
     if residue_index == 1:
-        return True
+        return _has_explicit_n_terminus_atoms(structure.residues[residue_index - 1])
     return not _is_polymeric_successor(
         structure.residues[residue_index - 2],
         structure.residues[residue_index - 1],
@@ -315,7 +349,7 @@ def _infer_upper_terminus(structure, residue_index: int, residue_metadata):
         return bool(metadata["is_upper_terminus"])
     residue = structure.residues[residue_index - 1]
     if residue.ter or residue_index == len(structure.residues):
-        return True
+        return _has_explicit_c_terminus_atoms(residue)
     return not _is_polymeric_successor(
         residue,
         structure.residues[residue_index],
@@ -417,10 +451,22 @@ def _hydrogen_stem(atom_name: str) -> str:
 
 
 def _is_hydrogen_atom(atom) -> bool:
+    atom_name = _strip(getattr(atom, "name", "")).upper()
     try:
-        return int(getattr(atom, "atomic_number", 0) or 0) == 1
+        atomic_number = int(getattr(atom, "atomic_number", 0) or 0)
     except Exception:
-        return _strip(getattr(atom, "name", "")).upper().startswith("H")
+        atomic_number = 0
+    return atomic_number == 1 or bool(_hydrogen_stem(atom_name))
+
+
+def _residue_atom_debug_summary(residue) -> str:
+    labels = []
+    for atom in getattr(residue, "atoms", ()):
+        labels.append(
+            f"{_strip(getattr(atom, 'name', '')).upper() or '<unnamed>'}"
+            f"(Z={getattr(atom, 'atomic_number', '?')})"
+        )
+    return ", ".join(labels) if labels else "<none>"
 
 
 def _match_terminal_hydrogen_by_order(residue, pose_atom_name: str, used_atom_ids=None):
@@ -675,7 +721,8 @@ class RosettaPose:
                 )
                 if source_atom is None:
                     raise RosettaError(
-                        f"Could not map atom {pose_atom_name} in residue {residue.name} {residue.number}."
+                        f"Could not map atom {pose_atom_name} in residue {residue.name} {residue.number}. "
+                        f"Available atoms: {_residue_atom_debug_summary(residue)}."
                     )
                 used_atom_ids.add(id(source_atom))
                 try:
