@@ -396,6 +396,26 @@ def _hydrogen_order(atom_name: str) -> int:
     return int(match.group(1)) - 1
 
 
+def _leading_digit_hydrogen_stem(atom_name: str) -> str:
+    match = _LEADING_DIGIT_ATOM_NAME.match(_strip(atom_name).upper())
+    if match is None:
+        return ""
+    stem = match.group(2)
+    return stem if stem.startswith("H") else ""
+
+
+def _hydrogen_stem(atom_name: str) -> str:
+    text = _strip(atom_name).upper()
+    leading_stem = _leading_digit_hydrogen_stem(text)
+    if leading_stem:
+        return leading_stem
+    if not text.startswith("H"):
+        return ""
+    if len(text) > 1 and text[-1].isdigit():
+        return text[:-1]
+    return text
+
+
 def _is_hydrogen_atom(atom) -> bool:
     try:
         return int(getattr(atom, "atomic_number", 0) or 0) == 1
@@ -423,6 +443,19 @@ def _match_terminal_hydrogen_by_order(residue, pose_atom_name: str, used_atom_id
     return hydrogens[0]
 
 
+def _match_leading_digit_hydrogen_by_stem(residue, pose_atom_name: str, used_atom_ids=None):
+    pose_stem = _leading_digit_hydrogen_stem(pose_atom_name)
+    if not pose_stem:
+        return None
+    used_atom_ids = used_atom_ids or set()
+    for atom in residue.atoms:
+        if id(atom) in used_atom_ids or not _is_hydrogen_atom(atom):
+            continue
+        if _hydrogen_stem(getattr(atom, "name", "")) == pose_stem:
+            return atom
+    return None
+
+
 def _match_structure_atom(residue, residue_type, pose_atom_name: str, residue_meta, used_atom_ids=None):
     used_atom_ids = used_atom_ids or set()
     atoms_by_name = {_strip(atom.name).upper(): atom for atom in residue.atoms}
@@ -436,6 +469,9 @@ def _match_structure_atom(residue, residue_type, pose_atom_name: str, residue_me
         if atom is not None and id(atom) not in used_atom_ids:
             return atom
     fallback_atom = _match_terminal_hydrogen_by_order(residue, pose_atom_name, used_atom_ids)
+    if fallback_atom is not None:
+        return fallback_atom
+    fallback_atom = _match_leading_digit_hydrogen_by_stem(residue, pose_atom_name, used_atom_ids)
     if fallback_atom is not None:
         return fallback_atom
     return None
