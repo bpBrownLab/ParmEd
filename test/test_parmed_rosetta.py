@@ -504,6 +504,99 @@ def test_fake_structure_to_pose_does_not_force_nterminus_variant_without_nh3(mon
     assert pose.residue(1).type().name() == "GLY"
 
 
+def test_fake_structure_to_pose_allows_unmapped_virtual_atoms(monkeypatch):
+    pro_type = FakeResidueType(
+        unique_name="PRO",
+        name3_value="PRO",
+        name1_value="P",
+        atom_order=("N", "NV", "CD", "CA", "C", "O"),
+        atom_types={
+            "N": FakeAtomType(element="N", atom_type_name="Nbb", lj_radius=1.4, lj_wdepth=0.2),
+            "NV": FakeAtomType(
+                element="EP",
+                atom_type_name="VIRT",
+                lj_radius=0.0,
+                lj_wdepth=0.0,
+                is_virtual=True,
+            ),
+            "CD": FakeAtomType(element="C", atom_type_name="CH2", lj_radius=1.8, lj_wdepth=0.1),
+            "CA": FakeAtomType(element="C", atom_type_name="CAbb", lj_radius=1.8, lj_wdepth=0.1),
+            "C": FakeAtomType(element="C", atom_type_name="CObb", lj_radius=1.7, lj_wdepth=0.12),
+            "O": FakeAtomType(element="O", atom_type_name="OCbb", lj_radius=1.5, lj_wdepth=0.2),
+        },
+    )
+    fake_import = build_fake_import([pro_type])
+    monkeypatch.setattr(rosetta_pose_module, "_import_pyrosetta", lambda: fake_import)
+    structure = _build_structure(
+        [
+            (
+                3,
+                "A",
+                "PRO",
+                [
+                    ("N", "Nbb", (0.0, 0.0, 0.0)),
+                    ("CD", "CH2", (1.0, 0.0, 0.0)),
+                    ("CA", "CAbb", (2.0, 0.0, 0.0)),
+                    ("C", "CObb", (3.0, 0.0, 0.0)),
+                    ("O", "OCbb", (4.0, 0.0, 0.0)),
+                ],
+            ),
+        ],
+        bonds=[],
+    )
+
+    pose = save_rosetta(structure)
+
+    assert pose.total_residue() == 1
+    assert pose.residue(1).type().name() == "PRO"
+
+
+def test_fake_structure_to_pose_uses_cterminus_variant_only_with_terminal_oxygen(monkeypatch):
+    ala_type = FakeResidueType(
+        unique_name="ALA",
+        name3_value="ALA",
+        name1_value="A",
+        atom_order=("N", "H", "CA", "C", "O"),
+        atom_types={
+            "N": FakeAtomType(element="N", atom_type_name="Nbb", lj_radius=1.4, lj_wdepth=0.2),
+            "H": FakeAtomType(element="H", atom_type_name="Hpol", lj_radius=1.0, lj_wdepth=0.02),
+            "CA": FakeAtomType(element="C", atom_type_name="CAbb", lj_radius=1.8, lj_wdepth=0.1),
+            "C": FakeAtomType(element="C", atom_type_name="CObb", lj_radius=1.7, lj_wdepth=0.12),
+            "O": FakeAtomType(element="O", atom_type_name="OCbb", lj_radius=1.5, lj_wdepth=0.2),
+        },
+    )
+    cterm_ala_type = FakeResidueType(
+        unique_name="ALA:CtermProteinFull",
+        name3_value="ALA",
+        name1_value="A",
+        atom_order=("N", "H", "CA", "C", "O", "OXT"),
+        atom_types={
+            "N": FakeAtomType(element="N", atom_type_name="Nbb", lj_radius=1.4, lj_wdepth=0.2),
+            "H": FakeAtomType(element="H", atom_type_name="Hpol", lj_radius=1.0, lj_wdepth=0.02),
+            "CA": FakeAtomType(element="C", atom_type_name="CAbb", lj_radius=1.8, lj_wdepth=0.1),
+            "C": FakeAtomType(element="C", atom_type_name="CObb", lj_radius=1.7, lj_wdepth=0.12),
+            "O": FakeAtomType(element="O", atom_type_name="OCbb", lj_radius=1.5, lj_wdepth=0.2),
+            "OXT": FakeAtomType(element="O", atom_type_name="OCbb", lj_radius=1.5, lj_wdepth=0.2),
+        },
+    )
+    fake_import = build_fake_import([cterm_ala_type, ala_type])
+    monkeypatch.setattr(rosetta_pose_module, "_import_pyrosetta", lambda: fake_import)
+
+    no_oxt = _build_structure(
+        [(1, "A", "ALA", [("N", "Nbb", (0.0, 0.0, 0.0)), ("H", "Hpol", (0.0, 0.5, 0.0)), ("CA", "CAbb", (1.0, 0.0, 0.0)), ("C", "CObb", (2.0, 0.0, 0.0)), ("O", "OCbb", (3.0, 0.0, 0.0))])],
+        bonds=[],
+        ter_indices=(1,),
+    )
+    with_oxt = _build_structure(
+        [(1, "A", "ALA", [("N", "Nbb", (0.0, 0.0, 0.0)), ("H", "Hpol", (0.0, 0.5, 0.0)), ("CA", "CAbb", (1.0, 0.0, 0.0)), ("C", "CObb", (2.0, 0.0, 0.0)), ("O", "OCbb", (3.0, 0.0, 0.0)), ("OXT", "OCbb", (2.0, 1.0, 0.0))])],
+        bonds=[],
+        ter_indices=(1,),
+    )
+
+    assert save_rosetta(no_oxt).residue(1).type().name() == "ALA"
+    assert save_rosetta(with_oxt).residue(1).type().name() == "ALA:CtermProteinFull"
+
+
 def test_fake_structure_to_pose_handles_disulfides_ptms_and_metadata_copy(monkeypatch):
     _install_fake_pyrosetta(monkeypatch)
     structure = _build_structure(

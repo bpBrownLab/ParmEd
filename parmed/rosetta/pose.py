@@ -469,6 +469,20 @@ def _residue_atom_debug_summary(residue) -> str:
     return ", ".join(labels) if labels else "<none>"
 
 
+def _pose_atom_is_virtual(pose_residue, atom_index: int) -> bool:
+    atom_type = _safe_call(pose_residue, "atom_type", atom_index)
+    return bool(_safe_call(atom_type, "is_virtual", default=False))
+
+
+def _first_structure_atom_coordinates(residue):
+    for atom in getattr(residue, "atoms", ()):
+        try:
+            return float(atom.xx), float(atom.xy), float(atom.xz)
+        except AttributeError:
+            continue
+    return 0.0, 0.0, 0.0
+
+
 def _match_terminal_hydrogen_by_order(residue, pose_atom_name: str, used_atom_ids=None):
     if not _is_terminal_hydrogen_name(pose_atom_name):
         return None
@@ -720,6 +734,10 @@ class RosettaPose:
                     used_atom_ids,
                 )
                 if source_atom is None:
+                    if _pose_atom_is_virtual(pose_residue, atom_index):
+                        coordinates = xyz_vector(*_first_structure_atom_coordinates(residue))
+                        pose.set_xyz(AtomID(atom_index, residue_index), coordinates)
+                        continue
                     raise RosettaError(
                         f"Could not map atom {pose_atom_name} in residue {residue.name} {residue.number}. "
                         f"Available atoms: {_residue_atom_debug_summary(residue)}."
